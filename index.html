@@ -109,9 +109,27 @@
 
   .key-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: 1fr auto auto;
     gap: 12px;
     align-items: end;
+  }
+
+  .save-key-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    padding-bottom: 10px;
+  }
+
+  .save-key-label input[type="checkbox"] {
+    width: auto;
+    accent-color: var(--accent);
+    cursor: pointer;
   }
 
   .field-label {
@@ -538,13 +556,13 @@
     <div class="setup-title">// API CONFIGURATION</div>
     <div class="key-grid">
       <div>
-        <div class="field-label">CLAUDE API KEY</div>
-        <input type="password" id="claudeKey" placeholder="sk-ant-api03-..." />
+        <div class="field-label">GEMINI API KEY</div>
+        <input type="password" id="geminiKey" placeholder="AIza..." />
       </div>
-      <div>
-        <div class="field-label">NEWS API KEY (선택)</div>
-        <input type="password" id="newsKey" placeholder="NewsAPI key (없으면 스킵)" />
-      </div>
+      <label class="save-key-label">
+        <input type="checkbox" id="saveKey" onchange="toggleSaveKey()" />
+        이 기기에 저장
+      </label>
       <div></div>
     </div>
   </div>
@@ -749,8 +767,29 @@ async function fetchEarnings(query) {
   } catch(e) { return []; }
 }
 
-// ─── Claude Narrative Analysis ───
-async function analyzeWithClaude(claudeKey, query, signals) {
+// ─── localStorage 키 저장 ───
+function loadSavedKey() {
+  const saved = localStorage.getItem('tenbagger_gemini_key');
+  if (saved) {
+    document.getElementById('geminiKey').value = saved;
+    document.getElementById('saveKey').checked = true;
+  }
+}
+
+function toggleSaveKey() {
+  const checked = document.getElementById('saveKey').checked;
+  const key = document.getElementById('geminiKey').value.trim();
+  if (checked && key) {
+    localStorage.setItem('tenbagger_gemini_key', key);
+  } else {
+    localStorage.removeItem('tenbagger_gemini_key');
+  }
+}
+
+window.addEventListener('load', loadSavedKey);
+
+// ─── Gemini 3 Flash 내러티브 분석 ───
+async function analyzeWithGemini(geminiKey, query, signals) {
   const signalText = signals.map(s =>
     `[${s.source.toUpperCase()}] ${s.title}\n${s.summary}`
   ).join('\n\n');
@@ -759,7 +798,7 @@ async function analyzeWithClaude(claudeKey, query, signals) {
 
 Sector/Theme being analyzed: "${query}"
 
-Raw signals collected from arXiv papers, news, government contracts, and earnings calls:
+Raw signals collected from arXiv papers, news, government contracts, and earnings data:
 ${signalText}
 
 Analyze this sector and respond ONLY in valid JSON with this exact structure:
@@ -778,20 +817,27 @@ Analyze this sector and respond ONLY in valid JSON with this exact structure:
   "verdict": "<BUY THE SECTOR | WATCH CLOSELY | TOO EARLY | TOO LATE>"
 }`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 1.0
+        }
+      })
+    }
+  );
 
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  const raw = data.content[0].text.replace(/```json|```/g, '').trim();
-  return JSON.parse(raw);
+
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
 }
 
 // ─── Render signals ───
@@ -860,7 +906,7 @@ function renderAI(analysis) {
 
   panel.innerHTML = `
     <div class="ai-header">
-      <div class="ai-badge">CLAUDE ANALYSIS</div>
+      <div class="ai-badge">GEMINI 3 FLASH</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${verdictColors[analysis.verdict] || 'var(--text)'};letter-spacing:2px;">
         ${analysis.verdict}
       </div>
@@ -890,12 +936,16 @@ function renderAI(analysis) {
 
 // ─── Main scan ───
 async function startScan() {
-  const claudeKey = document.getElementById('claudeKey').value.trim();
-  const newsKey = document.getElementById('newsKey').value.trim();
+  const geminiKey = document.getElementById('geminiKey').value.trim();
   const query = document.getElementById('sectorQuery').value.trim();
 
-  if (!claudeKey) { alert('Claude API Key를 입력해주세요.'); return; }
+  if (!geminiKey) { alert('Gemini API Key를 입력해주세요.'); return; }
   if (!query) { alert('섹터/테마를 입력해주세요.'); return; }
+
+  // 저장 체크된 경우 키 저장
+  if (document.getElementById('saveKey').checked) {
+    localStorage.setItem('tenbagger_gemini_key', geminiKey);
+  }
 
   const btn = document.getElementById('scanBtn');
   btn.disabled = true;
@@ -925,7 +975,7 @@ async function startScan() {
     addStep('news', '뉴스 수집 중...');
     setStep('news', 'running');
     try {
-      const data = await fetchNews(query, newsKey);
+      const data = await fetchNews(query, '');
       allSignals.push(...data);
       setStep('news', 'done', `뉴스 — ${data.length}개 기사 수집 완료`);
     } catch(e) { setStep('news', 'error', `뉴스 오류: ${e.message}`); }
@@ -953,18 +1003,18 @@ async function startScan() {
     } catch(e) { setStep('earnings', 'error', `어닝콜 오류: ${e.message}`); }
   }
 
-  // Claude
-  addStep('claude', 'Claude 내러티브 분석 중...');
-  setStep('claude', 'running');
+  // Gemini
+  addStep('gemini', 'Gemini 3 Flash 내러티브 분석 중...');
+  setStep('gemini', 'running');
   try {
-    const analysis = await analyzeWithClaude(claudeKey, query, allSignals);
-    setStep('claude', 'done', 'Claude 분석 완료');
+    const analysis = await analyzeWithGemini(geminiKey, query, allSignals);
+    setStep('gemini', 'done', 'Gemini 분석 완료');
 
     resultsSection.classList.add('visible');
     renderSignals(allSignals);
     renderAI(analysis);
   } catch(e) {
-    setStep('claude', 'error', `Claude 오류: ${e.message}`);
+    setStep('gemini', 'error', `Gemini 오류: ${e.message}`);
     resultsSection.classList.add('visible');
     renderSignals(allSignals);
     document.getElementById('aiPanel').innerHTML = `<div class="empty-state"><span class="big">ERROR</span>${e.message}</div>`;
