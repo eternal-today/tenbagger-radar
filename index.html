@@ -810,6 +810,8 @@ function renderWatchlist() {
 }
 
 // ─── Auto Detect Sectors ───
+let shownSectors = []; // 이미 추천된 섹터 누적
+
 async function autoDetectSectors() {
   const geminiKey = document.getElementById('geminiKey').value.trim();
   if (!geminiKey) { alert('Gemini API Key를 먼저 입력해주세요.'); return; }
@@ -822,18 +824,30 @@ async function autoDetectSectors() {
     ? `사용자의 관심 섹터: ${watchlist.join(', ')}. 이 분야의 세부 테마도 고려해줘.`
     : '';
 
-  const prompt = `You are a tenbagger stock analyst. Today is ${new Date().toISOString().slice(0,10)}.
+  const excludeHint = shownSectors.length
+    ? `IMPORTANT: Do NOT suggest any of these already-shown sectors: ${shownSectors.join(', ')}. Find completely different ones.`
+    : '';
 
-Identify 6-8 emerging investment sectors/themes that are currently at Stage 2 or Stage 3 (VC momentum building, early media attention) — BEFORE mainstream retail investor awareness.
+  const prompt = `You are a contrarian tenbagger stock analyst. Today is ${new Date().toISOString().slice(0,10)}.
 
-Focus on sectors in the US stock market (NYSE/NASDAQ) with pure-play small/mid cap opportunities.
+Your job is to find UNEXPECTED, OVERLOOKED, and NICHE emerging sectors — NOT the obvious ones everyone is talking about.
+
+${excludeHint}
+
+Rules:
+- Avoid overused themes like "AI", "quantum computing", "nuclear fusion" unless it's a very specific niche sub-theme
+- Spread across completely different industries (e.g. biotech, materials, defense, agriculture, maritime, space, energy storage, industrial, consumer)
+- Each sector must be from a DIFFERENT industry vertical — no clustering
+- Stage 2 or 3 only (VC momentum building or early media attention)
+- Must have pure-play small/mid cap NYSE/NASDAQ opportunities
+- Be creative and specific — "AI-powered drug discovery for neglected tropical diseases" is better than just "biotech"
 ${watchlistHint}
 
-Respond ONLY in valid JSON:
+Identify 8 such sectors. Respond ONLY in valid JSON:
 {
   "sectors": [
     {
-      "name": "<short English search query, 2-4 words>",
+      "name": "<specific English search query, 3-5 words>",
       "label": "<Korean display name>",
       "stage": <2 or 3>,
       "one_line": "<한 줄 설명 in Korean>"
@@ -848,7 +862,7 @@ Respond ONLY in valid JSON:
       body: JSON.stringify({
         _geminiKey: geminiKey,
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 1.0 }
+        generationConfig: { responseMimeType: 'application/json', temperature: 1.5 }
       })
     });
     const data = await res.json();
@@ -856,6 +870,11 @@ Respond ONLY in valid JSON:
 
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+
+    // 추천된 섹터 누적 저장
+    parsed.sectors.forEach(s => {
+      if (!shownSectors.includes(s.name)) shownSectors.push(s.name);
+    });
 
     const container = document.getElementById('autoSectorChips');
     container.innerHTML = '';
