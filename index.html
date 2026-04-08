@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TENBAGGER RADAR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --border: #1c2333;
+    --accent: #00ff88;
+    --accent2: #00b8ff;
+    --warn: #ff6b35;
+    --muted: #4a5568;
+    --text: #e2e8f0;
+    --text-dim: #718096;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 32px 0 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.4rem;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 30px rgba(0,255,136,0.4);
+  }
+
+  .logo span { color: var(--text-dim); }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* API Key Setup */
+  .setup-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--accent);
+    padding: 28px;
+    margin: 28px 0;
+  }
+
+  .setup-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+  }
+
+  .key-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 12px;
+    align-items: end;
+  }
+
+  .field-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus { border-color: var(--accent); }
+
+  /* Source toggles */
+  .sources-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+  }
+
+  .source-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    user-select: none;
+  }
+
+  .source-toggle.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,255,136,0.05);
+  }
+
+  .source-toggle .src-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .source-toggle.active .src-dot { background: var(--accent); }
+
+  /* Sector input */
+  .query-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .sector-examples {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .chip {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+  }
+
+  .chip:hover {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  /* Button */
+  .btn-scan {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 10px 28px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-scan:hover {
+    background: #00ffaa;
+    box-shadow: 0 0 20px rgba(0,255,136,0.4);
+  }
+
+  .btn-scan:disabled {
+    background: var(--muted);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Progress */
+  .progress-block {
+    display: none;
+    margin: 20px 0;
+  }
+
+  .progress-block.visible { display: block; }
+
+  .progress-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .step-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .step-line.done { color: var(--accent); }
+  .step-line.running { color: var(--accent2); }
+  .step-line.error { color: var(--warn); }
+
+  .step-icon { width: 16px; text-align: center; }
+
+  /* Results */
+  .results-section {
+    display: none;
+    margin: 28px 0;
+  }
+
+  .results-section.visible { display: block; }
+
+  .section-header {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Signal cards */
+  .signals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .signal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeIn 0.4s ease forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(8px); }
+  }
+
+  .signal-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+  }
+
+  .signal-card.arxiv::before { background: var(--accent); }
+  .signal-card.news::before { background: var(--accent2); }
+  .signal-card.gov::before { background: #ff9f43; }
+  .signal-card.earnings::before { background: #a29bfe; }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .source-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border: 1px solid;
+  }
+
+  .source-tag.arxiv { color: var(--accent); border-color: var(--accent); }
+  .source-tag.news { color: var(--accent2); border-color: var(--accent2); }
+  .source-tag.gov { color: #ff9f43; border-color: #ff9f43; }
+  .source-tag.earnings { color: #a29bfe; border-color: #a29bfe; }
+
+  .card-date {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+  }
+
+  .card-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .card-summary {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .card-link {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: color 0.2s;
+  }
+
+  .card-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* AI Analysis Panel */
+  .ai-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+
+  .ai-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .ai-badge {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.9rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+    background: rgba(0,255,136,0.08);
+    padding: 4px 12px;
+    border: 1px solid rgba(0,255,136,0.3);
+  }
+
+  .stage-meter {
+    display: flex;
+    gap: 6px;
+    margin: 16px 0;
+  }
+
+  .stage-block {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    position: relative;
+  }
+
+  .stage-block.filled { background: var(--accent); }
+  .stage-block.current { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  .stage-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .ai-scores {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .score-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 12px;
+  }
+
+  .score-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+
+  .score-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+
+  .score-value.high { color: var(--accent); }
+  .score-value.mid { color: #ff9f43; }
+  .score-value.low { color: var(--warn); }
+
+  .score-bar {
+    margin-top: 6px;
+    height: 2px;
+    background: var(--border);
+  }
+
+  .score-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 1s ease;
+  }
+
+  .ai-thesis {
+    background: var(--bg);
+    border-left: 2px solid var(--accent);
+    padding: 14px 16px;
+    margin-top: 16px;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .ai-risks {
+    margin-top: 14px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .risk-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .risk-item::before {
+    content: '⚠';
+    color: var(--warn);
+    flex-shrink: 0;
+  }
+
+  /* Empty / error state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 2;
+  }
+
+  .empty-state .big {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    color: var(--border);
+    letter-spacing: 4px;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">TENBAGGER <span>RADAR</span></div>
+    <div class="status-dot">
+      <div class="dot"></div>
+      SECTOR SIGNAL ENGINE v0.1
+    </div>
+  </header>
+
+  <!-- Setup -->
+  <div class="setup-panel">
+    <div class="setup-title">// API CONFIGURATION</div>
+    <div class="key-grid">
+      <div>
+        <div class="field-label">CLAUDE API KEY</div>
+        <input type="password" id="claudeKey" placeholder="sk-ant-api03-..." />
+      </div>
+      <div>
+        <div class="field-label">NEWS API KEY (선택)</div>
+        <input type="password" id="newsKey" placeholder="NewsAPI key (없으면 스킵)" />
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <!-- Signal Sources -->
+  <div class="setup-title" style="font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text-dim);letter-spacing:2px;margin-bottom:10px;">// SIGNAL SOURCES</div>
+  <div class="sources-row">
+    <div class="source-toggle active" data-src="arxiv" onclick="toggleSource(this)">
+      <div class="src-dot"></div> arXiv 논문
+    </div>
+    <div class="source-toggle active" data-src="news" onclick="toggleSource(this)">
+      <div class="src-dot"></div> 뉴스
+    </div>
+    <div class="source-toggle active" data-src="gov" onclick="toggleSource(this)">
+      <div class="src-dot"></div> 미 정부계약
+    </div>
+    <div class="source-toggle active" data-src="earnings" onclick="toggleSource(this)">
+      <div class="src-dot"></div> 어닝콜 키워드
+    </div>
+  </div>
+
+  <!-- Query -->
+  <div class="query-row">
+    <div>
+      <div class="field-label">SECTOR / THEME</div>
+      <input type="text" id="sectorQuery" placeholder="예: quantum computing, compact fusion, satellite IoT ..." />
+      <div class="sector-examples">
+        <div class="chip" onclick="setQuery('quantum computing')">양자컴퓨팅</div>
+        <div class="chip" onclick="setQuery('compact nuclear fusion')">소형 핵융합</div>
+        <div class="chip" onclick="setQuery('satellite internet LEO')">위성인터넷</div>
+        <div class="chip" onclick="setQuery('AI defense autonomous')">AI 방산</div>
+        <div class="chip" onclick="setQuery('longevity biotech aging')">장수 바이오</div>
+        <div class="chip" onclick="setQuery('solid state battery EV')">전고체 배터리</div>
+        <div class="chip" onclick="setQuery('humanoid robotics')">휴머노이드 로봇</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;padding-top:22px;">
+      <button class="btn-scan" id="scanBtn" onclick="startScan()">SCAN</button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-block" id="progressBlock">
+    <div class="section-header">// SCANNING</div>
+    <div class="progress-steps" id="progressSteps"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-section" id="resultsSection">
+    <div class="section-header">// RAW SIGNALS</div>
+    <div class="signals-grid" id="signalsGrid"></div>
+
+    <div class="section-header">// AI NARRATIVE ANALYSIS</div>
+    <div class="ai-panel" id="aiPanel"></div>
+  </div>
+
+  <div style="height:60px;"></div>
+</div>
+
+<script>
+const activeSources = new Set(['arxiv', 'news', 'gov', 'earnings']);
+
+function toggleSource(el) {
+  const src = el.dataset.src;
+  if (activeSources.has(src)) { activeSources.delete(src); el.classList.remove('active'); }
+  else { activeSources.add(src); el.classList.add('active'); }
+}
+
+function setQuery(q) {
+  document.getElementById('sectorQuery').value = q;
+}
+
+// ─── Step logger ───
+let stepEls = {};
+function initProgress() {
+  const steps = document.getElementById('progressSteps');
+  steps.innerHTML = '';
+  stepEls = {};
+}
+
+function addStep(id, label) {
+  const el = document.createElement('div');
+  el.className = 'step-line';
+  el.innerHTML = `<span class="step-icon">○</span><span>${label}</span>`;
+  document.getElementById('progressSteps').appendChild(el);
+  stepEls[id] = el;
+}
+
+function setStep(id, state, msg) {
+  const el = stepEls[id];
+  if (!el) return;
+  const icons = { running: '◎', done: '●', error: '✕' };
+  el.querySelector('.step-icon').textContent = icons[state] || '○';
+  el.className = `step-line ${state}`;
+  if (msg) el.querySelector('span:last-child').textContent = msg;
+}
+
+// ─── arXiv ───
+async function fetchArxiv(query) {
+  const q = encodeURIComponent(query);
+  const url = `https://export.arxiv.org/api/query?search_query=all:${q}&start=0&max_results=6&sortBy=submittedDate&sortOrder=descending`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(text, 'application/xml');
+  const entries = xml.querySelectorAll('entry');
+  return Array.from(entries).map(e => ({
+    source: 'arxiv',
+    title: e.querySelector('title')?.textContent?.trim() || '',
+    summary: e.querySelector('summary')?.textContent?.trim().slice(0, 200) + '...' || '',
+    link: e.querySelector('id')?.textContent?.trim() || '',
+    date: e.querySelector('published')?.textContent?.slice(0, 10) || ''
+  }));
+}
+
+// ─── News (NewsAPI or fallback RSS) ───
+async function fetchNews(query, apiKey) {
+  if (apiKey) {
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&pageSize=6&language=en&apiKey=${apiKey}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.articles) {
+        return data.articles.map(a => ({
+          source: 'news',
+          title: a.title || '',
+          summary: a.description || '',
+          link: a.url || '',
+          date: (a.publishedAt || '').slice(0, 10)
+        }));
+      }
+    } catch(e) {}
+  }
+  // Fallback: GNews RSS via allorigins
+  try {
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+    const res = await fetch(proxy);
+    const data = await res.json();
+    const xml = new DOMParser().parseFromString(data.contents, 'application/xml');
+    const items = xml.querySelectorAll('item');
+    return Array.from(items).slice(0, 6).map(item => ({
+      source: 'news',
+      title: item.querySelector('title')?.textContent || '',
+      summary: (item.querySelector('description')?.textContent || '').replace(/<[^>]+>/g, '').slice(0, 200) + '...',
+      link: item.querySelector('link')?.textContent || '',
+      date: (item.querySelector('pubDate')?.textContent || '').slice(0, 16)
+    }));
+  } catch(e) {
+    return [];
+  }
+}
+
+// ─── USASpending.gov ───
+async function fetchGov(query) {
+  const today = new Date().toISOString().slice(0, 10);
+  const yearAgo = new Date(Date.now() - 365*24*60*60*1000).toISOString().slice(0, 10);
+  const body = {
+    filters: {
+      keywords: [query],
+      time_period: [{ start_date: yearAgo, end_date: today }]
+    },
+    fields: ["Recipient Name", "Award Amount", "Award Description", "Action Date", "Awarding Agency Name"],
+    page: 1, limit: 6,
+    sort: "Action Date", order: "desc"
+  };
+  try {
+    const res = await fetch('https://api.usaspending.gov/api/v2/search/spending_by_award/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.results) return [];
+    return data.results.map(r => ({
+      source: 'gov',
+      title: `${r['Recipient Name'] || 'Unknown'} — $${Number(r['Award Amount'] || 0).toLocaleString()}`,
+      summary: (r['Award Description'] || '').slice(0, 200) + '...',
+      link: '',
+      date: (r['Action Date'] || '').slice(0, 10),
+      agency: r['Awarding Agency Name'] || ''
+    }));
+  } catch(e) { return []; }
+}
+
+// ─── Earnings (Seeking Alpha RSS fallback) ───
+async function fetchEarnings(query) {
+  try {
+    const rssUrl = `https://seekingalpha.com/search?q=${encodeURIComponent(query)}&tab=analysis`;
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent('https://feeds.finance.yahoo.com/rss/2.0/headline?s=' + encodeURIComponent(query.split(' ')[0]) + '&region=US&lang=en-US')}`;
+    const res = await fetch(proxy);
+    const data = await res.json();
+    const xml = new DOMParser().parseFromString(data.contents, 'application/xml');
+    const items = xml.querySelectorAll('item');
+    return Array.from(items).slice(0, 4).map(item => ({
+      source: 'earnings',
+      title: item.querySelector('title')?.textContent || '',
+      summary: (item.querySelector('description')?.textContent || '').replace(/<[^>]+>/g, '').slice(0, 200) + '...',
+      link: item.querySelector('link')?.textContent || '',
+      date: (item.querySelector('pubDate')?.textContent || '').slice(0, 16)
+    }));
+  } catch(e) { return []; }
+}
+
+// ─── Claude Narrative Analysis ───
+async function analyzeWithClaude(claudeKey, query, signals) {
+  const signalText = signals.map(s =>
+    `[${s.source.toUpperCase()}] ${s.title}\n${s.summary}`
+  ).join('\n\n');
+
+  const prompt = `You are a tenbagger stock analyst specializing in identifying emerging sectors BEFORE mainstream market attention.
+
+Sector/Theme being analyzed: "${query}"
+
+Raw signals collected from arXiv papers, news, government contracts, and earnings calls:
+${signalText}
+
+Analyze this sector and respond ONLY in valid JSON with this exact structure:
+{
+  "narrative_stage": <integer 1-5>,
+  "stage_label": "<Stage 1: Academic Only | Stage 2: VC Moving | Stage 3: Media Starting | Stage 4: Retail Inflow | Stage 5: Mainstream>",
+  "scores": {
+    "narrative_strength": <1-10>,
+    "capital_momentum": <1-10>,
+    "timing_alpha": <1-10>,
+    "regulatory_tailwind": <1-10>
+  },
+  "investment_thesis": "<2-3 sentences in Korean explaining why this sector could produce a tenbagger and what the key catalysts are>",
+  "pure_play_hints": ["<potential pure play stock ticker or company name>", "<another>", "<another>"],
+  "key_risks": ["<risk 1 in Korean>", "<risk 2 in Korean>", "<risk 3 in Korean>"],
+  "verdict": "<BUY THE SECTOR | WATCH CLOSELY | TOO EARLY | TOO LATE>"
+}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  const raw = data.content[0].text.replace(/```json|```/g, '').trim();
+  return JSON.parse(raw);
+}
+
+// ─── Render signals ───
+function renderSignals(signals) {
+  const grid = document.getElementById('signalsGrid');
+  grid.innerHTML = '';
+  if (!signals.length) {
+    grid.innerHTML = '<div class="empty-state"><span class="big">NO SIGNAL</span>해당 섹터의 신호가 감지되지 않았습니다.</div>';
+    return;
+  }
+  signals.forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = `signal-card ${s.source}`;
+    card.style.animationDelay = `${i * 0.06}s`;
+    card.innerHTML = `
+      <div class="card-meta">
+        <span class="source-tag ${s.source}">${s.source.toUpperCase()}</span>
+        <span class="card-date">${s.date}</span>
+      </div>
+      <div class="card-title">${s.title}</div>
+      <div class="card-summary">${s.summary}</div>
+      ${s.link ? `<a class="card-link" href="${s.link}" target="_blank">→ 원문 보기</a>` : ''}
+      ${s.agency ? `<div class="card-summary" style="margin-top:6px;font-size:.7rem;">기관: ${s.agency}</div>` : ''}
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ─── Render AI panel ───
+function renderAI(analysis) {
+  const panel = document.getElementById('aiPanel');
+  const stageColors = ['', '#4a5568', '#a29bfe', '#ff9f43', '#ff6b35', '#e74c3c'];
+  const verdictColors = {
+    'BUY THE SECTOR': 'var(--accent)',
+    'WATCH CLOSELY': '#ff9f43',
+    'TOO EARLY': 'var(--accent2)',
+    'TOO LATE': 'var(--warn)'
+  };
+
+  const stageLabels = ['', 'Academic', 'VC Moving', 'Media', 'Retail', 'Mainstream'];
+  const meterHTML = [1,2,3,4,5].map(i => {
+    let cls = '';
+    if (i < analysis.narrative_stage) cls = 'filled';
+    if (i === analysis.narrative_stage) cls = 'current';
+    return `<div class="stage-block ${cls}"></div>`;
+  }).join('');
+
+  const scoresHTML = Object.entries(analysis.scores).map(([k, v]) => {
+    const label = k.replace(/_/g, ' ').toUpperCase();
+    const cls = v >= 7 ? 'high' : v >= 5 ? 'mid' : 'low';
+    return `
+      <div class="score-item">
+        <div class="score-label">${label}</div>
+        <div class="score-value ${cls}">${v}<span style="font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--text-dim)">/10</span></div>
+        <div class="score-bar"><div class="score-fill" style="width:${v*10}%"></div></div>
+      </div>`;
+  }).join('');
+
+  const risksHTML = analysis.key_risks.map(r =>
+    `<div class="risk-item">${r}</div>`
+  ).join('');
+
+  const hintsHTML = analysis.pure_play_hints.map(h =>
+    `<span style="font-family:'Space Mono',monospace;font-size:.72rem;color:var(--accent2);border:1px solid var(--accent2);padding:2px 8px;margin-right:6px;">${h}</span>`
+  ).join('');
+
+  panel.innerHTML = `
+    <div class="ai-header">
+      <div class="ai-badge">CLAUDE ANALYSIS</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${verdictColors[analysis.verdict] || 'var(--text)'};letter-spacing:2px;">
+        ${analysis.verdict}
+      </div>
+    </div>
+
+    <div class="score-label">내러티브 성숙도 — Stage ${analysis.narrative_stage}: ${analysis.stage_label}</div>
+    <div class="stage-labels">
+      ${stageLabels.slice(1).map(l => `<span>${l}</span>`).join('')}
+    </div>
+    <div class="stage-meter">${meterHTML}</div>
+
+    <div class="ai-scores">${scoresHTML}</div>
+
+    <div style="margin-top:16px;">
+      <div class="score-label" style="margin-bottom:8px;">PURE PLAY 후보</div>
+      ${hintsHTML}
+    </div>
+
+    <div class="ai-thesis">${analysis.investment_thesis}</div>
+
+    <div class="ai-risks">
+      <div class="score-label" style="margin-bottom:8px;">KEY RISKS</div>
+      ${risksHTML}
+    </div>
+  `;
+}
+
+// ─── Main scan ───
+async function startScan() {
+  const claudeKey = document.getElementById('claudeKey').value.trim();
+  const newsKey = document.getElementById('newsKey').value.trim();
+  const query = document.getElementById('sectorQuery').value.trim();
+
+  if (!claudeKey) { alert('Claude API Key를 입력해주세요.'); return; }
+  if (!query) { alert('섹터/테마를 입력해주세요.'); return; }
+
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+
+  const progressBlock = document.getElementById('progressBlock');
+  const resultsSection = document.getElementById('resultsSection');
+  progressBlock.classList.add('visible');
+  resultsSection.classList.remove('visible');
+
+  initProgress();
+
+  const allSignals = [];
+
+  // arXiv
+  if (activeSources.has('arxiv')) {
+    addStep('arxiv', 'arXiv 논문 수집 중...');
+    setStep('arxiv', 'running');
+    try {
+      const data = await fetchArxiv(query);
+      allSignals.push(...data);
+      setStep('arxiv', 'done', `arXiv — ${data.length}개 논문 수집 완료`);
+    } catch(e) { setStep('arxiv', 'error', `arXiv 오류: ${e.message}`); }
+  }
+
+  // News
+  if (activeSources.has('news')) {
+    addStep('news', '뉴스 수집 중...');
+    setStep('news', 'running');
+    try {
+      const data = await fetchNews(query, newsKey);
+      allSignals.push(...data);
+      setStep('news', 'done', `뉴스 — ${data.length}개 기사 수집 완료`);
+    } catch(e) { setStep('news', 'error', `뉴스 오류: ${e.message}`); }
+  }
+
+  // Gov
+  if (activeSources.has('gov')) {
+    addStep('gov', '미 정부 계약 데이터 수집 중...');
+    setStep('gov', 'running');
+    try {
+      const data = await fetchGov(query);
+      allSignals.push(...data);
+      setStep('gov', 'done', `USASpending — ${data.length}개 계약 수집 완료`);
+    } catch(e) { setStep('gov', 'error', `정부계약 오류: ${e.message}`); }
+  }
+
+  // Earnings
+  if (activeSources.has('earnings')) {
+    addStep('earnings', '어닝콜/재무 뉴스 수집 중...');
+    setStep('earnings', 'running');
+    try {
+      const data = await fetchEarnings(query);
+      allSignals.push(...data);
+      setStep('earnings', 'done', `어닝콜 — ${data.length}개 항목 수집 완료`);
+    } catch(e) { setStep('earnings', 'error', `어닝콜 오류: ${e.message}`); }
+  }
+
+  // Claude
+  addStep('claude', 'Claude 내러티브 분석 중...');
+  setStep('claude', 'running');
+  try {
+    const analysis = await analyzeWithClaude(claudeKey, query, allSignals);
+    setStep('claude', 'done', 'Claude 분석 완료');
+
+    resultsSection.classList.add('visible');
+    renderSignals(allSignals);
+    renderAI(analysis);
+  } catch(e) {
+    setStep('claude', 'error', `Claude 오류: ${e.message}`);
+    resultsSection.classList.add('visible');
+    renderSignals(allSignals);
+    document.getElementById('aiPanel').innerHTML = `<div class="empty-state"><span class="big">ERROR</span>${e.message}</div>`;
+  }
+
+  btn.disabled = false;
+}
+</script>
+</body>
+</html>
