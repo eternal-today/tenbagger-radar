@@ -539,7 +539,22 @@
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); }
 
-  /* Auto detect button */
+  .btn-retry {
+    margin-top: 14px;
+    background: transparent;
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    padding: 8px 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-retry:hover {
+    background: rgba(255,107,53,0.1);
+  }
   .btn-detect {
     background: transparent;
     border: 1px solid var(--accent);
@@ -718,6 +733,9 @@
   <div class="progress-block" id="progressBlock">
     <div class="section-header">// SCANNING</div>
     <div class="progress-steps" id="progressSteps"></div>
+    <button class="btn-retry" id="retryBtn" style="display:none;" onclick="retryGemini()">
+      ↻ Gemini 분석만 재시도
+    </button>
   </div>
 
   <!-- Results -->
@@ -734,6 +752,8 @@
 
 <script>
 const activeSources = new Set(['arxiv', 'news', 'gov', 'earnings']);
+let cachedSignals = [];  // 수집된 신호 캐시
+let cachedQuery = '';    // 마지막 스캔 쿼리 캐시
 
 function toggleSource(el) {
   const src = el.dataset.src;
@@ -863,7 +883,27 @@ Respond ONLY in valid JSON:
 
 window.addEventListener('load', () => { loadSavedKey(); loadWatchlist(); });
 
-// ─── Step logger ───
+// ─── Gemini 재시도 ───
+async function retryGemini() {
+  if (!cachedSignals.length) { alert('먼저 SCAN을 실행해주세요.'); return; }
+  const geminiKey = document.getElementById('geminiKey').value.trim();
+  if (!geminiKey) { alert('Gemini API Key를 입력해주세요.'); return; }
+
+  const retryBtn = document.getElementById('retryBtn');
+  retryBtn.style.display = 'none';
+  setStep('gemini', 'running', 'Gemini 3 Flash 재분석 중...');
+
+  try {
+    const analysis = await analyzeWithGemini(geminiKey, cachedQuery, cachedSignals);
+    setStep('gemini', 'done', 'Gemini 분석 완료');
+    document.getElementById('resultsSection').classList.add('visible');
+    renderSignals(cachedSignals);
+    renderAI(analysis);
+  } catch(e) {
+    setStep('gemini', 'error', `Gemini 오류: ${e.message}`);
+    retryBtn.style.display = 'block';
+  }
+}
 let stepEls = {};
 function initProgress() {
   const steps = document.getElementById('progressSteps');
@@ -993,7 +1033,21 @@ Sector/Theme being analyzed: "${query}"
 Raw signals collected from arXiv papers, news, government contracts, and earnings data:
 ${signalText}
 
-IMPORTANT: For pure_play_hints, list ONLY companies that are currently publicly traded on NYSE or NASDAQ. Do NOT include private companies, subsidiaries, or companies listed on other exchanges. Each entry must have a valid ticker symbol.
+IMPORTANT: For pure_play_hints, follow these rules strictly:
+
+HARD FILTER (must meet all):
+- Listed on NYSE or NASDAQ only
+- Market cap between $50M and $3B (small/mid cap only) — strictly exclude mega/large caps like NVIDIA, Intel, Google, Microsoft, etc.
+- Valid ticker symbol required
+
+SOFT CRITERIA (Gemini judgment):
+- Company's primary business is this sector (pure play, not a diversified conglomerate)
+- Founded within the last 15 years preferred
+- Backed by institutional investors or VC
+- Cash runway of at least 12 months (debt level is acceptable — many early-stage companies carry debt or dilute via equity raises)
+- Focus on narrative concentration, not profitability
+
+The goal is to find the next IONQ, PLTR, or SATL at their earliest stage — not established large-cap players.
 {
   "narrative_stage": <integer 1-5>,
   "stage_label": "<Stage 1: Academic Only | Stage 2: VC Moving | Stage 3: Media Starting | Stage 4: Retail Inflow | Stage 5: Mainstream>",
@@ -1159,6 +1213,7 @@ async function startScan() {
   initProgress();
 
   const allSignals = [];
+  cachedQuery = query; // 쿼리 캐시
 
   // arXiv
   if (activeSources.has('arxiv')) {
@@ -1204,9 +1259,13 @@ async function startScan() {
     } catch(e) { setStep('earnings', 'error', `어닝콜 오류: ${e.message}`); }
   }
 
+  // 신호 캐시 저장
+  cachedSignals = [...allSignals];
+
   // Gemini
   addStep('gemini', 'Gemini 3 Flash 내러티브 분석 중...');
   setStep('gemini', 'running');
+  document.getElementById('retryBtn').style.display = 'none';
   try {
     const analysis = await analyzeWithGemini(geminiKey, query, allSignals);
     setStep('gemini', 'done', 'Gemini 분석 완료');
@@ -1216,6 +1275,7 @@ async function startScan() {
     renderAI(analysis);
   } catch(e) {
     setStep('gemini', 'error', `Gemini 오류: ${e.message}`);
+    document.getElementById('retryBtn').style.display = 'block';
     resultsSection.classList.add('visible');
     renderSignals(allSignals);
     document.getElementById('aiPanel').innerHTML = `<div class="empty-state"><span class="big">ERROR</span>${e.message}</div>`;
