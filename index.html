@@ -822,17 +822,15 @@ Respond ONLY in valid JSON:
 }`;
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 1.0 }
-        })
-      }
-    );
+    const res = await fetch(`${WORKER_URL}/proxy/gemini`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        _geminiKey: geminiKey,
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 1.0 }
+      })
+    });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
 
@@ -925,20 +923,24 @@ async function fetchNews(query) {
   }));
 }
 
-// ─── USASpending.gov via Worker ───
+// ─── USASpending → FPDS via Worker ───
 async function fetchGov(query) {
   const url = `${WORKER_URL}/proxy/gov?q=${encodeURIComponent(query)}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!data.results) return [];
-  return data.results.map(r => ({
-    source: 'gov',
-    title: `${r['Recipient Name'] || 'Unknown'} — $${Number(r['Award Amount'] || 0).toLocaleString()}`,
-    summary: (r['Award Description'] || '').slice(0, 200) + '...',
-    link: '',
-    date: (r['Action Date'] || '').slice(0, 10),
-    agency: r['Awarding Agency Name'] || ''
-  }));
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const xml = new DOMParser().parseFromString(text, 'application/xml');
+    const entries = xml.querySelectorAll('entry');
+    if (!entries.length) return [];
+    return Array.from(entries).slice(0, 6).map(e => ({
+      source: 'gov',
+      title: e.querySelector('title')?.textContent || '',
+      summary: (e.querySelector('content')?.textContent || e.querySelector('summary')?.textContent || '').slice(0, 200) + '...',
+      link: e.querySelector('link')?.getAttribute('href') || '',
+      date: (e.querySelector('updated')?.textContent || '').slice(0, 10),
+      agency: ''
+    }));
+  } catch(e) { return []; }
 }
 
 // ─── Earnings (Yahoo Finance RSS via Worker) ───
@@ -978,7 +980,7 @@ function toggleSaveKey() {
 
 // (load handled above)
 
-// ─── Gemini 3 Flash 내러티브 분석 ───
+// ─── Gemini 3 Flash 내러티브 분석 (Worker 경유) ───
 async function analyzeWithGemini(geminiKey, query, signals) {
   const signalText = signals.map(s =>
     `[${s.source.toUpperCase()}] ${s.title}\n${s.summary}`
@@ -1007,27 +1009,23 @@ Analyze this sector and respond ONLY in valid JSON with this exact structure:
   "verdict": "<BUY THE SECTOR | WATCH CLOSELY | TOO EARLY | TOO LATE>"
 }`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 1.0
-        }
-      })
-    }
-  );
+  const res = await fetch(`${WORKER_URL}/proxy/gemini`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      _geminiKey: geminiKey,
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 1.0
+      }
+    })
+  });
 
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const clean = raw.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+  return JSON.parse(raw.replace(/```json|```/g, '').trim());
 }
 
 // ─── Render signals ───
