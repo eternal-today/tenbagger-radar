@@ -538,6 +538,101 @@
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Auto detect button */
+  .btn-detect {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 10px 22px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-detect:hover {
+    background: rgba(0,255,136,0.08);
+    box-shadow: 0 0 16px rgba(0,255,136,0.2);
+  }
+
+  .btn-detect:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Watchlist */
+  .watchlist-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+
+  .watchlist-add-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .btn-add {
+    background: var(--border);
+    border: 1px solid var(--muted);
+    color: var(--text);
+    padding: 10px 18px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .chip-watchlist {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,184,255,0.06);
+    border: 1px solid var(--accent2);
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    color: var(--accent2);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+  }
+
+  .chip-watchlist:hover { background: rgba(0,184,255,0.12); }
+
+  .chip-watchlist .del {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+
+  .chip-watchlist .del:hover { color: var(--warn); }
+
+  .chip-auto {
+    background: rgba(0,255,136,0.06);
+    border: 1px solid var(--accent);
+    padding: 5px 14px;
+    font-size: 0.75rem;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+    animation: fadeIn 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  .chip-auto:hover { background: rgba(0,255,136,0.14); }
 </style>
 </head>
 <body>
@@ -584,20 +679,35 @@
     </div>
   </div>
 
-  <!-- Query -->
+  <!-- Auto Detect -->
+  <div style="margin:20px 0 8px;">
+    <button class="btn-detect" id="detectBtn" onclick="autoDetectSectors()">
+      ⚡ 지금 주목해야 할 섹터 탐지
+    </button>
+    <span style="font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--text-dim);margin-left:14px;">Gemini가 Stage 2~3 섹터를 자동으로 찾아드립니다</span>
+  </div>
+
+  <!-- Auto Detect Results -->
+  <div id="autoSectors" style="display:none;margin-bottom:20px;">
+    <div class="setup-title" style="margin-bottom:10px;">// GEMINI 추천 섹터</div>
+    <div id="autoSectorChips" class="sector-examples"></div>
+  </div>
+
+  <!-- Watchlist -->
+  <div class="watchlist-panel">
+    <div class="setup-title">// 관심 섹터</div>
+    <div class="watchlist-add-row">
+      <input type="text" id="watchlistInput" placeholder="예: 바이오, space tourism, AI chip ..." onkeydown="if(event.key==='Enter')addWatchlist()" />
+      <button class="btn-add" onclick="addWatchlist()">+ 추가</button>
+    </div>
+    <div id="watchlistChips" class="sector-examples" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Manual Query -->
   <div class="query-row">
     <div>
-      <div class="field-label">SECTOR / THEME</div>
-      <input type="text" id="sectorQuery" placeholder="예: quantum computing, compact fusion, satellite IoT ..." />
-      <div class="sector-examples">
-        <div class="chip" onclick="setQuery('quantum computing')">양자컴퓨팅</div>
-        <div class="chip" onclick="setQuery('compact nuclear fusion')">소형 핵융합</div>
-        <div class="chip" onclick="setQuery('satellite internet LEO')">위성인터넷</div>
-        <div class="chip" onclick="setQuery('AI defense autonomous')">AI 방산</div>
-        <div class="chip" onclick="setQuery('longevity biotech aging')">장수 바이오</div>
-        <div class="chip" onclick="setQuery('solid state battery EV')">전고체 배터리</div>
-        <div class="chip" onclick="setQuery('humanoid robotics')">휴머노이드 로봇</div>
-      </div>
+      <div class="field-label">직접 입력</div>
+      <input type="text" id="sectorQuery" placeholder="예: quantum computing, compact fusion ..." />
     </div>
     <div style="display:flex;align-items:flex-start;padding-top:22px;">
       <button class="btn-scan" id="scanBtn" onclick="startScan()">SCAN</button>
@@ -635,6 +745,126 @@ function setQuery(q) {
   document.getElementById('sectorQuery').value = q;
 }
 
+// ─── Watchlist ───
+let watchlist = [];
+
+function loadWatchlist() {
+  const saved = localStorage.getItem('tenbagger_watchlist');
+  if (saved) watchlist = JSON.parse(saved);
+  renderWatchlist();
+}
+
+function saveWatchlist() {
+  localStorage.setItem('tenbagger_watchlist', JSON.stringify(watchlist));
+}
+
+function addWatchlist() {
+  const input = document.getElementById('watchlistInput');
+  const val = input.value.trim();
+  if (!val || watchlist.includes(val)) { input.value = ''; return; }
+  watchlist.push(val);
+  saveWatchlist();
+  renderWatchlist();
+  input.value = '';
+}
+
+function removeWatchlist(item) {
+  watchlist = watchlist.filter(w => w !== item);
+  saveWatchlist();
+  renderWatchlist();
+}
+
+function renderWatchlist() {
+  const container = document.getElementById('watchlistChips');
+  container.innerHTML = '';
+  if (!watchlist.length) {
+    container.innerHTML = '<span style="font-family:\'Space Mono\',monospace;font-size:0.68rem;color:var(--muted);">아직 관심 섹터가 없습니다</span>';
+    return;
+  }
+  watchlist.forEach(item => {
+    const chip = document.createElement('div');
+    chip.className = 'chip-watchlist';
+    chip.innerHTML = `<span onclick="setQuery('${item}')">${item}</span><span class="del" onclick="removeWatchlist('${item}')">✕</span>`;
+    container.appendChild(chip);
+  });
+}
+
+// ─── Auto Detect Sectors ───
+async function autoDetectSectors() {
+  const geminiKey = document.getElementById('geminiKey').value.trim();
+  if (!geminiKey) { alert('Gemini API Key를 먼저 입력해주세요.'); return; }
+
+  const btn = document.getElementById('detectBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 탐지 중...';
+
+  const watchlistHint = watchlist.length
+    ? `사용자의 관심 섹터: ${watchlist.join(', ')}. 이 분야의 세부 테마도 고려해줘.`
+    : '';
+
+  const prompt = `You are a tenbagger stock analyst. Today is ${new Date().toISOString().slice(0,10)}.
+
+Identify 6-8 emerging investment sectors/themes that are currently at Stage 2 or Stage 3 (VC momentum building, early media attention) — BEFORE mainstream retail investor awareness.
+
+Focus on sectors in the US stock market (NYSE/NASDAQ) with pure-play small/mid cap opportunities.
+${watchlistHint}
+
+Respond ONLY in valid JSON:
+{
+  "sectors": [
+    {
+      "name": "<short English search query, 2-4 words>",
+      "label": "<Korean display name>",
+      "stage": <2 or 3>,
+      "one_line": "<한 줄 설명 in Korean>"
+    }
+  ]
+}`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 1.0 }
+        })
+      }
+    );
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+
+    const container = document.getElementById('autoSectorChips');
+    container.innerHTML = '';
+    parsed.sectors.forEach((s, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'chip-auto';
+      chip.style.animationDelay = `${i * 0.07}s`;
+      chip.title = s.one_line;
+      chip.textContent = `${s.label} (Stage ${s.stage})`;
+      chip.onclick = () => {
+        setQuery(s.name);
+        document.getElementById('sectorQuery').scrollIntoView({ behavior: 'smooth' });
+      };
+      container.appendChild(chip);
+    });
+
+    document.getElementById('autoSectors').style.display = 'block';
+  } catch(e) {
+    alert(`섹터 탐지 오류: ${e.message}`);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚡ 지금 주목해야 할 섹터 탐지';
+}
+
+window.addEventListener('load', () => { loadSavedKey(); loadWatchlist(); });
+
 // ─── Step logger ───
 let stepEls = {};
 function initProgress() {
@@ -660,10 +890,11 @@ function setStep(id, state, msg) {
   if (msg) el.querySelector('span:last-child').textContent = msg;
 }
 
+const WORKER_URL = 'https://white-disk-5e71.chungwon02.workers.dev';
+
 // ─── arXiv ───
 async function fetchArxiv(query) {
-  const q = encodeURIComponent(query);
-  const url = `https://export.arxiv.org/api/query?search_query=all:${q}&start=0&max_results=6&sortBy=submittedDate&sortOrder=descending`;
+  const url = `${WORKER_URL}/proxy/arxiv?q=${encodeURIComponent(query)}`;
   const res = await fetch(url);
   const text = await res.text();
   const parser = new DOMParser();
@@ -678,93 +909,52 @@ async function fetchArxiv(query) {
   }));
 }
 
-// ─── News (NewsAPI or fallback RSS) ───
-async function fetchNews(query, apiKey) {
-  if (apiKey) {
-    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&pageSize=6&language=en&apiKey=${apiKey}`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.articles) {
-        return data.articles.map(a => ({
-          source: 'news',
-          title: a.title || '',
-          summary: a.description || '',
-          link: a.url || '',
-          date: (a.publishedAt || '').slice(0, 10)
-        }));
-      }
-    } catch(e) {}
-  }
-  // Fallback: GNews RSS via allorigins
-  try {
-    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
-    const res = await fetch(proxy);
-    const data = await res.json();
-    const xml = new DOMParser().parseFromString(data.contents, 'application/xml');
-    const items = xml.querySelectorAll('item');
-    return Array.from(items).slice(0, 6).map(item => ({
-      source: 'news',
-      title: item.querySelector('title')?.textContent || '',
-      summary: (item.querySelector('description')?.textContent || '').replace(/<[^>]+>/g, '').slice(0, 200) + '...',
-      link: item.querySelector('link')?.textContent || '',
-      date: (item.querySelector('pubDate')?.textContent || '').slice(0, 16)
-    }));
-  } catch(e) {
-    return [];
-  }
+// ─── News (Google News RSS via Worker) ───
+async function fetchNews(query) {
+  const url = `${WORKER_URL}/proxy/news?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  const items = xml.querySelectorAll('item');
+  return Array.from(items).slice(0, 6).map(item => ({
+    source: 'news',
+    title: item.querySelector('title')?.textContent || '',
+    summary: (item.querySelector('description')?.textContent || '').replace(/<[^>]+>/g, '').slice(0, 200) + '...',
+    link: item.querySelector('link')?.textContent || '',
+    date: (item.querySelector('pubDate')?.textContent || '').slice(0, 16)
+  }));
 }
 
-// ─── USASpending.gov ───
+// ─── USASpending.gov via Worker ───
 async function fetchGov(query) {
-  const today = new Date().toISOString().slice(0, 10);
-  const yearAgo = new Date(Date.now() - 365*24*60*60*1000).toISOString().slice(0, 10);
-  const body = {
-    filters: {
-      keywords: [query],
-      time_period: [{ start_date: yearAgo, end_date: today }]
-    },
-    fields: ["Recipient Name", "Award Amount", "Award Description", "Action Date", "Awarding Agency Name"],
-    page: 1, limit: 6,
-    sort: "Action Date", order: "desc"
-  };
-  try {
-    const res = await fetch('https://api.usaspending.gov/api/v2/search/spending_by_award/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!data.results) return [];
-    return data.results.map(r => ({
-      source: 'gov',
-      title: `${r['Recipient Name'] || 'Unknown'} — $${Number(r['Award Amount'] || 0).toLocaleString()}`,
-      summary: (r['Award Description'] || '').slice(0, 200) + '...',
-      link: '',
-      date: (r['Action Date'] || '').slice(0, 10),
-      agency: r['Awarding Agency Name'] || ''
-    }));
-  } catch(e) { return []; }
+  const url = `${WORKER_URL}/proxy/gov?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!data.results) return [];
+  return data.results.map(r => ({
+    source: 'gov',
+    title: `${r['Recipient Name'] || 'Unknown'} — $${Number(r['Award Amount'] || 0).toLocaleString()}`,
+    summary: (r['Award Description'] || '').slice(0, 200) + '...',
+    link: '',
+    date: (r['Action Date'] || '').slice(0, 10),
+    agency: r['Awarding Agency Name'] || ''
+  }));
 }
 
-// ─── Earnings (Seeking Alpha RSS fallback) ───
+// ─── Earnings (Yahoo Finance RSS via Worker) ───
 async function fetchEarnings(query) {
-  try {
-    const rssUrl = `https://seekingalpha.com/search?q=${encodeURIComponent(query)}&tab=analysis`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent('https://feeds.finance.yahoo.com/rss/2.0/headline?s=' + encodeURIComponent(query.split(' ')[0]) + '&region=US&lang=en-US')}`;
-    const res = await fetch(proxy);
-    const data = await res.json();
-    const xml = new DOMParser().parseFromString(data.contents, 'application/xml');
-    const items = xml.querySelectorAll('item');
-    return Array.from(items).slice(0, 4).map(item => ({
-      source: 'earnings',
-      title: item.querySelector('title')?.textContent || '',
-      summary: (item.querySelector('description')?.textContent || '').replace(/<[^>]+>/g, '').slice(0, 200) + '...',
-      link: item.querySelector('link')?.textContent || '',
-      date: (item.querySelector('pubDate')?.textContent || '').slice(0, 16)
-    }));
-  } catch(e) { return []; }
+  const url = `${WORKER_URL}/proxy/earnings?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  const items = xml.querySelectorAll('item');
+  return Array.from(items).slice(0, 4).map(item => ({
+    source: 'earnings',
+    title: item.querySelector('title')?.textContent || '',
+    summary: (item.querySelector('description')?.textContent || '').replace(/<[^>]+>/g, '').slice(0, 200) + '...',
+    link: item.querySelector('link')?.textContent || '',
+    date: (item.querySelector('pubDate')?.textContent || '').slice(0, 16)
+  }));
 }
 
 // ─── localStorage 키 저장 ───
@@ -786,7 +976,7 @@ function toggleSaveKey() {
   }
 }
 
-window.addEventListener('load', loadSavedKey);
+// (load handled above)
 
 // ─── Gemini 3 Flash 내러티브 분석 ───
 async function analyzeWithGemini(geminiKey, query, signals) {
@@ -975,7 +1165,7 @@ async function startScan() {
     addStep('news', '뉴스 수집 중...');
     setStep('news', 'running');
     try {
-      const data = await fetchNews(query, '');
+      const data = await fetchNews(query);
       allSignals.push(...data);
       setStep('news', 'done', `뉴스 — ${data.length}개 기사 수집 완료`);
     } catch(e) { setStep('news', 'error', `뉴스 오류: ${e.message}`); }
