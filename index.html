@@ -1081,8 +1081,9 @@ The goal is to find the next IONQ, PLTR, or SATL at their earliest stage — not
   });
 
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (data.error) throw new Error(`Gemini 서버 오류: ${data.error.message}`);
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!raw) throw new Error('Gemini 응답이 비어있습니다. 서버 과부하 상태입니다. 재시도 버튼을 눌러주세요.');
   return JSON.parse(raw.replace(/```json|```/g, '').trim());
 }
 
