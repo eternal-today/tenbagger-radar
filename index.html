@@ -993,7 +993,7 @@ Sector/Theme being analyzed: "${query}"
 Raw signals collected from arXiv papers, news, government contracts, and earnings data:
 ${signalText}
 
-Analyze this sector and respond ONLY in valid JSON with this exact structure:
+IMPORTANT: For pure_play_hints, list ONLY companies that are currently publicly traded on NYSE or NASDAQ. Do NOT include private companies, subsidiaries, or companies listed on other exchanges. Each entry must have a valid ticker symbol.
 {
   "narrative_stage": <integer 1-5>,
   "stage_label": "<Stage 1: Academic Only | Stage 2: VC Moving | Stage 3: Media Starting | Stage 4: Retail Inflow | Stage 5: Mainstream>",
@@ -1004,7 +1004,11 @@ Analyze this sector and respond ONLY in valid JSON with this exact structure:
     "regulatory_tailwind": <1-10>
   },
   "investment_thesis": "<2-3 sentences in Korean explaining why this sector could produce a tenbagger and what the key catalysts are>",
-  "pure_play_hints": ["<potential pure play stock ticker or company name>", "<another>", "<another>"],
+  "pure_play_hints": [
+    { "ticker": "<NYSE/NASDAQ ticker symbol>", "name": "<company name>", "exchange": "<NYSE|NASDAQ>" },
+    { "ticker": "<ticker>", "name": "<company name>", "exchange": "<NYSE|NASDAQ>" },
+    { "ticker": "<ticker>", "name": "<company name>", "exchange": "<NYSE|NASDAQ>" }
+  ],
   "key_risks": ["<risk 1 in Korean>", "<risk 2 in Korean>", "<risk 3 in Korean>"],
   "verdict": "<BUY THE SECTOR | WATCH CLOSELY | TOO EARLY | TOO LATE>"
 }`;
@@ -1088,9 +1092,18 @@ function renderAI(analysis) {
     `<div class="risk-item">${r}</div>`
   ).join('');
 
-  const hintsHTML = analysis.pure_play_hints.map(h =>
-    `<span style="font-family:'Space Mono',monospace;font-size:.72rem;color:var(--accent2);border:1px solid var(--accent2);padding:2px 8px;margin-right:6px;">${h}</span>`
-  ).join('');
+  const hintsHTML = analysis.pure_play_hints.map(h => {
+    // 구조체 형태 { ticker, name, exchange } 또는 문자열 둘 다 처리
+    if (typeof h === 'object' && h.ticker) {
+      return `<span style="display:inline-flex;align-items:center;gap:6px;font-family:'Space Mono',monospace;font-size:0.72rem;border:1px solid var(--accent2);padding:4px 10px;margin-right:6px;margin-bottom:6px;">
+        <span style="color:var(--accent);font-weight:700;">${h.ticker}</span>
+        <span style="color:var(--text-dim);">|</span>
+        <span style="color:var(--accent2);">${h.name}</span>
+        <span style="color:var(--muted);font-size:0.6rem;">${h.exchange || ''}</span>
+      </span>`;
+    }
+    return `<span style="font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--accent2);border:1px solid var(--accent2);padding:4px 10px;margin-right:6px;margin-bottom:6px;">${h}</span>`;
+  }).join('');
 
   panel.innerHTML = `
     <div class="ai-header">
